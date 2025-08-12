@@ -7,3 +7,5 @@ reportlab
 openpyxl
 Pillow
 scipy
+altair
+fpdf
