@@ -1,424 +1,419 @@
-# app.py
-# Streamlit Stunting / Status Gizi (Non-Diagnostik)
-# Pastikan meletakkan file WHO LMS pada folder who_standards/
-#  - who_standards/who_0_5.csv  (kolom: age_months, sex (M/F), L, M, S)
-#  - who_standards/who_5_19.csv (kolom: age_years, sex (M/F), L, M, S)
+# File: app.py
+"""
+Streamlit app: Aplikasi Deteksi Status Gizi Anak (Non-Diagnosis)
+Fitur:
+- Home
+- Deteksi untuk usia 0-5 tahun (WHO Child Growth Standards, LMS-based z-score)
+  - Menampilkan z-score, status, avatar, persentil
+  - Pilihan standar: Height-for-age (menggunakan LMS)
+- Deteksi untuk usia 5-19 tahun (WHO Growth Reference, LMS-based z-score)
+- Simpan pengukuran ke tabel (Excel download seluruh anak yang diukur)
+- Download PDF per anak (ringkasan hasil)
+- Visualisasi data: plot tinggi vs usia, histogram z-score
+- Disclaimer, Tutorial Pengukuran, Kalkulator Prediksi Tinggi Anak
+
+Catatan:
+- Siapkan file WHO LMS CSV: who_0_5.csv dan who_5_19.csv dalam folder who_standards/
+  Format CSV yang diharapkan (kolom contoh):
+    Untuk 0-5 tahun: Month, Sex, L, M, S  (Month = 0..60)
+    Untuk 5-19 tahun: AgeYear, Sex, L, M, S (AgeYear = integer tahun 5..19) *atau* Month (>=61)
+- Siapkan folder assets/ dengan avatar:
+    boy_normal.png, boy_under.png, girl_normal.png, girl_under.png
+
+Jalankan:
+    pip install -r requirements.txt
+    streamlit run app.py
+
+"""
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import date, datetime
-from io import BytesIO
-import base64
-
-# plotting
+import datetime
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import os
 import plotly.express as px
+from scipy import stats
 
-# stats
-from scipy.stats import norm
+# -------------------------
+# Utility functions
+# -------------------------
 
-# PDF (optional)
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-    REPORTLAB_AVAILABLE = True
-except Exception:
-    REPORTLAB_AVAILABLE = False
+def load_who_lms(path):
+    if not os.path.exists(path):
+        st.error(f"File standar WHO tidak ditemukan: {path}")
+        return None
+    return pd.read_csv(path)
 
-# ---------------------------
-# Config
-# ---------------------------
-st.set_page_config(page_title='Deteksi Status Gizi Anak (Non-Diagnostik)', layout='wide')
 
-WHO_0_5_PATH = 'who_standards/who_0_5.csv'
-WHO_5_19_PATH = 'who_standards/who_5_19.csv'
-
-# ---------------------------
-# Utilities
-# ---------------------------
-@st.cache_data
-def load_who(path):
+def lms_zscore(value, L, M, S):
+    """Hitung Z-score berdasarkan parameter LMS (WHO method).
+    value: tinggi (cm)
+    L, M, S: parameter LMS
+    """
     try:
-        df = pd.read_csv(path)
-        return df
+        L = float(L); M = float(M); S = float(S)
+        if L == 0:
+            z = np.log(value / M) / S
+        else:
+            z = ((value / M) ** L - 1) / (L * S)
+        return float(z)
     except Exception:
-        return pd.DataFrame()
+        return None
 
-def lms_zscore(x, L, M, S):
-    # LMS formula to compute z-score
-    if abs(L) < 1e-8:
-        return np.log(x / M) / S
-    return ((x / M) ** L - 1) / (L * S)
 
 def z_to_percentile(z):
-    return float(norm.cdf(z) * 100)
+    return stats.norm.cdf(z) * 100
 
-def avatar_svg_base64(sex='M', status='Normal'):
-    colors = {'Normal':'#2ecc71','Risk':'#f1c40f','Stunting':'#e67e22','Severe Stunting':'#c0392b'}
-    color = colors.get(status, '#95a5a6')
-    label = 'L' if sex=='M' else 'P'
-    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>
-    <rect width='100%' height='100%' rx='20' fill='#f7f9f9'/>
-    <circle cx='90' cy='50' r='36' fill='{color}' stroke='#2c3e50' stroke-width='2'/>
-    <rect x='46' y='96' width='88' height='56' rx='12' fill='{color}' opacity='0.9'/>
-    <text x='90' y='154' text-anchor='middle' font-size='12' fill='#2c3e50'>{label} | {status}</text>
-    </svg>"""
-    return 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
 
-def make_pdf_from_record(rec):
-    """
-    Returns BytesIO buffer. If reportlab missing, returns buffer with message.
-    """
-    buffer = BytesIO()
-    if not REPORTLAB_AVAILABLE:
-        buffer.write(b'PDF generation requires reportlab. Install reportlab to enable PDF export.')
-        buffer.seek(0)
-        return buffer
+def choose_avatar(sex_code, zscore):
+    if sex_code == 'M':
+        pref = 'boy'
+    else:
+        pref = 'girl'
+    if zscore is None:
+        state = 'normal'
+    elif zscore < -2:
+        state = 'under'
+    else:
+        state = 'normal'
+    return os.path.join('assets', f"{pref}_{state}.png")
+
+
+def buat_pdf_single(nama, ttl, usia_tahun, usia_bulan_total, kelas, jenis_kelamin_text, tinggi, zscore, persentil, status):
+    buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    y = 800
-    c.setFont('Helvetica-Bold', 14)
-    c.drawString(50, y, 'Laporan Pengukuran — Edukatif (Non-Diagnostik)')
-    y -= 28
-    c.setFont('Helvetica', 11)
-    for k in ['nama','ttl','jenis_kelamin','kelas','tanggal_ukur','umur_tahun','umur_bulan','berat_kg','tinggi_cm','z_haz','percentile','status']:
-        val = rec.get(k, '-')
-        c.drawString(50, y, f"{k.replace('_',' ').title()}: {val}")
-        y -= 18
-    y -= 6
-    c.drawString(50, y, "Catatan: Hasil hanya untuk edukasi dan pemantauan. Bukan diagnosis medis.")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, 820, "Laporan Hasil Pengukuran Status Gizi (Edukasi)")
+
+    c.setFont("Helvetica", 12)
+    c.drawString(50, 790, f"Nama: {nama}")
+    c.drawString(50, 770, f"Tanggal Lahir: {ttl}")
+    c.drawString(50, 750, f"Kelas: {kelas}")
+    c.drawString(50, 730, f"Jenis Kelamin: {jenis_kelamin_text}")
+    c.drawString(50, 710, f"Usia: {usia_tahun} tahun ({usia_bulan_total} bulan)")
+    c.drawString(50, 690, f"Tinggi: {tinggi} cm")
+    if zscore is not None:
+        c.drawString(50, 670, f"Z-score (Height-for-age): {zscore:.2f}")
+        c.drawString(50, 650, f"Persentil: {persentil:.1f} %")
+    c.drawString(50, 630, f"Status (non-diagnosis): {status}")
+
+    c.setFont("Helvetica-Oblique", 9)
+    c.drawString(50, 600, "Catatan: Hasil ini bersifat edukasi dan bukan diagnosis medis. Untuk evaluasi klinis, hubungi profesional kesehatan.")
     c.showPage()
     c.save()
     buffer.seek(0)
     return buffer
 
-# ---------------------------
-# Load WHO tables
-# ---------------------------
-who_0_5 = load_who(WHO_0_5_PATH)
-who_5_19 = load_who(WHO_5_19_PATH)
 
-# ---------------------------
-# Session storage
-# ---------------------------
-if 'df_children' not in st.session_state:
-    st.session_state.df_children = pd.DataFrame(columns=[
-        'id','nama','ttl','jenis_kelamin','kelas','tanggal_ukur','umur_tahun','umur_bulan','berat_kg','tinggi_cm','z_haz','percentile','status'
-    ])
+def df_to_excel_bytes(df):
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='data_pengukuran')
+        writer.save()
+    buffer.seek(0)
+    return buffer
 
-# ---------------------------
-# Sidebar & Navigation
-# ---------------------------
-st.sidebar.title('Menu')
-page = st.sidebar.radio('Pilih Halaman', [
-    'Home','Deteksi 0-5 tahun','Deteksi 5-19 tahun','Batch & Data','Visualisasi','Kalkulator Tinggi','Tutorial Pengukuran','Disclaimer'
+
+# -------------------------
+# App layout
+# -------------------------
+
+st.set_page_config(page_title="Aplikasi Deteksi Status Gizi Anak", layout='wide')
+
+# Sidebar
+st.sidebar.title("📌 Menu")
+menu = st.sidebar.radio("Navigasi", [
+    "🏠 Home",
+    "👶 Usia 0-5 Tahun",
+    "🧒 Usia 5-19 Tahun",
+    "📜 Disclaimer",
+    "📏 Tutorial Pengukuran",
+    "📐 Prediksi Tinggi Anak",
 ])
 
-st.sidebar.markdown('---')
-if not st.session_state.df_children.empty:
-    # prepare excel bytes
-    excel_buf = BytesIO()
-    with pd.ExcelWriter(excel_buf, engine='openpyxl') as writer:
-        st.session_state.df_children.to_excel(writer, index=False, sheet_name='hasil')
-    excel_buf.seek(0)
-    st.sidebar.download_button('📥 Unduh Semua Hasil (Excel)', data=excel_buf, file_name='hasil_pengukuran.xlsx')
+# Initialize session state storage for measurements
+if 'measurements' not in st.session_state:
+    st.session_state.measurements = pd.DataFrame(columns=[
+        'Timestamp','Nama','TanggalLahir','Kelas','Sex','UsiaTahun','UsiaBulan','Tinggi_cm','Zscore','Persentil','Status'
+    ])
 
-# ---------------------------
-# Home
-# ---------------------------
-if page == 'Home':
-    st.title('📏 Deteksi Status Gizi Anak — Edukatif & Non-Diagnostik')
-    st.markdown("""
-Aplikasi ini membantu memantau status gizi (tinggi terhadap umur) berdasarkan standar WHO.
-Hasil bersifat **edukatif**, **bukan diagnosis medis**.
-- Gunakan *Deteksi 0-5 tahun* untuk bayi/balita (WHO Child Growth Standards).
-- Gunakan *Deteksi 5-19 tahun* untuk anak & remaja (WHO Growth Reference).
-""")
-    c1, c2 = st.columns([2,1])
-    with c1:
-        st.header('Mulai Pemantauan')
-        st.write('- Pilih halaman deteksi sesuai usia anak.')
-        st.write('- Unggah batch Excel jika ingin memproses banyak anak sekaligus.')
-        st.write('- Lihat ringkasan & grafik di halaman Visualisasi.')
-    with c2:
-        st.image(avatar_svg_base64('M','Normal'), width=140)
-        st.image(avatar_svg_base64('F','Risk'), width=140)
 
-# ---------------------------
-# Helper: process store
-# ---------------------------
-def process_and_store(nama, ttl, jenis, kelas, tanggal_ukur, berat, tinggi, who_df, age_mode='months'):
-    # date types
-    if isinstance(ttl, str):
-        ttl = datetime.fromisoformat(ttl).date()
-    if isinstance(tanggal_ukur, str):
-        tanggal_ukur = datetime.fromisoformat(tanggal_ukur).date()
-    days = (tanggal_ukur - ttl).days
-    umur_months = int(days // 30)
-    umur_years = int(days // 365.25)
-    umur_m = umur_months % 12
+# -------------------------
+# Helpers for age
+# -------------------------
 
-    sex_code = 'M' if jenis.lower().startswith('l') or jenis.lower().startswith('m') else 'F'
+def hitung_usia(ttl):
+    today = datetime.date.today()
+    usia_tahun = today.year - ttl.year - ((today.month, today.day) < (ttl.month, ttl.day))
+    usia_bulan_total = (today.year - ttl.year) * 12 + today.month - ttl.month
+    return usia_tahun, usia_bulan_total
 
-    if who_df.empty:
-        return None, 'WHO standard file not available. Taruh CSV pada folder who_standards/'
 
-    # choose interpolation basis
-    df_sex = who_df[who_df['sex'].str.upper().str.startswith(sex_code)]
-    if df_sex.empty:
-        return None, 'WHO data tidak memiliki entri untuk jenis kelamin ini.'
+# -------------------------
+# Pages
+# -------------------------
 
-    if age_mode == 'months':
-        # column age_months expected
-        if 'age_months' not in df_sex.columns:
-            # try first column as ages
-            ages = df_sex.iloc[:,0].values
-        else:
-            ages = df_sex['age_months'].values
-        L = np.interp(umur_months, ages, df_sex['L'].values)
-        M = np.interp(umur_months, ages, df_sex['M'].values)
-        S = np.interp(umur_months, ages, df_sex['S'].values)
-    else:
-        # years (age decimal)
-        if 'age_years' not in df_sex.columns:
-            ages = df_sex.iloc[:,0].values
-        else:
-            ages = df_sex['age_years'].values
-        age_dec = (tanggal_ukur - ttl).days / 365.25
-        L = np.interp(age_dec, ages, df_sex['L'].values)
-        M = np.interp(age_dec, ages, df_sex['M'].values)
-        S = np.interp(age_dec, ages, df_sex['S'].values)
+if menu == "🏠 Home":
+    st.title("🌱 Aplikasi Deteksi Status Gizi Anak (Edukasi)")
+    st.markdown(
+        """
+        Aplikasi ini menggunakan parameter LMS dari standar WHO untuk menghitung **z-score** Height-for-age.
 
-    z = lms_zscore(tinggi, L, M, S)
-    pct = z_to_percentile(z)
-    if z < -3:
-        status = 'Severe Stunting'
-    elif z < -2:
-        status = 'Stunting'
-    elif z < -1:
-        status = 'Risk'
-    else:
-        status = 'Normal'
+        **Penting:** Hasil aplikasi ini hanya untuk edukasi — *bukan* diagnosis medis. Untuk penilaian klinis, hubungi tenaga kesehatan.
+        """
+    )
+    st.info("Siapkan file WHO LMS di folder who_standards/ dan avatar di folder assets/ sebelum menjalankan aplikasi secara penuh.")
 
-    rec = {
-        'id': len(st.session_state.df_children) + 1,
-        'nama': nama,
-        'ttl': ttl.isoformat(),
-        'jenis_kelamin': jenis,
-        'kelas': kelas,
-        'tanggal_ukur': tanggal_ukur.isoformat(),
-        'umur_tahun': umur_years,
-        'umur_bulan': umur_m,
-        'berat_kg': round(float(berat) if not pd.isna(berat) else np.nan,2),
-        'tinggi_cm': round(float(tinggi),2),
-        'z_haz': round(float(z),2),
-        'percentile': round(float(pct),1),
-        'status': status
-    }
-    st.session_state.df_children = pd.concat([st.session_state.df_children, pd.DataFrame([rec])], ignore_index=True, sort=False)
-    return rec, None
 
-# ---------------------------
-# Deteksi 0-5 tahun
-# ---------------------------
-if page == 'Deteksi 0-5 tahun':
-    st.header('Deteksi 0–5 tahun (WHO Child Growth Standards)')
-    st.info('Gunakan standar WHO Child Growth Standards (LMS).')
+elif menu == "👶 Usia 0-5 Tahun":
+    st.title("👶 Deteksi Usia 0-5 Tahun (WHO Child Growth Standards)")
 
     with st.form('form_0_5'):
-        col1, col2 = st.columns(2)
-        with col1:
-            nama = st.text_input('Nama lengkap')
-            ttl = st.date_input('Tanggal lahir', max_value=date.today())
-            jenis = st.selectbox('Jenis kelamin', ['Laki-laki','Perempuan'])
-            kelas = st.text_input('Kelas / Catatan (opsional)')
-        with col2:
-            tanggal_ukur = st.date_input('Tanggal ukur', value=date.today())
-            berat = st.number_input('Berat (kg)', min_value=0.0, step=0.01)
-            tinggi = st.number_input('Panjang / Tinggi (cm)', min_value=10.0, step=0.1)
-            st.write('Catatan: untuk <24 bulan gunakan panjang berbaring (recumbent length).')
-        submitted = st.form_submit_button('Hitung & Simpan')
+        nama = st.text_input("Nama Anak")
+        ttl = st.date_input("Tanggal Lahir")
+        kelas = st.text_input("Kelas (opsional)")
+        jenis_kelamin = st.selectbox("Jenis Kelamin", ["Laki-laki","Perempuan"]) 
+        tinggi = st.number_input("Tinggi Badan (cm)", min_value=20.0, max_value=140.0, step=0.1)
+        standar_opsi = st.selectbox("Pilih standar (Height-for-age)", ["WHO (LMS)"])
+        submitted = st.form_submit_button("Proses")
 
     if submitted:
-        rec, err = process_and_store(nama, ttl, jenis, kelas, tanggal_ukur, berat, tinggi, who_0_5, age_mode='months')
-        if err:
-            st.error(err)
+        if not nama:
+            st.warning("Masukkan nama anak.")
         else:
-            st.success(f"Z-score (HAZ): {rec['z_haz']}  — Persentil global ≈ {rec['percentile']}%")
-            st.image(avatar_svg_base64('M' if jenis.startswith('L') else 'F', rec['status']), width=160)
-            st.subheader('Saran singkat (non-diagnostik)')
-            if rec['status'] in ['Severe Stunting','Stunting']:
-                st.warning('Anak berada di bawah standar tinggi menurut WHO. Pertimbangkan konsultasi dengan tenaga kesehatan, perbaikan nutrisi, dan pemeriksaan lebih lanjut.')
-            elif rec['status']=='Risk':
-                st.info('Anak sedikit di bawah median. Pantau pertumbuhan dan pastikan asupan gizi seimbang.')
-            else:
-                st.success('Tinggi anak berada di kisaran normal. Pertahankan pola makan dan aktivitas sehat.')
+            usia_tahun, usia_bulan_total = hitung_usia(ttl)
+            df_who = load_who_lms('who_standards/who_0_5.csv')
+            sex_code = 'M' if jenis_kelamin == 'Laki-laki' else 'F'
+            zscore = None
+            pers = None
+            status = 'Data standar tidak tersedia pada usia tersebut.'
 
-            if REPORTLAB_AVAILABLE:
-                pdf_buf = make_pdf_from_record(rec)
-                st.download_button('📄 Unduh Laporan PDF', data=pdf_buf, file_name=f"laporan_{rec['id']}.pdf")
+            if df_who is not None:
+                # cari row berdasarkan usia bulan dan sex
+                row = df_who[(df_who['Month'] == usia_bulan_total) & (df_who['Sex'] == sex_code)]
+                if not row.empty:
+                    L = row['L'].values[0]
+                    M = row['M'].values[0]
+                    S = row['S'].values[0]
+                    zscore = lms_zscore(tinggi, L, M, S)
+                    if zscore is not None:
+                        pers = z_to_percentile(zscore)
+                        if zscore < -3:
+                            status = 'Sangat pendek (< -3 SD) — risiko stunting tinggi'
+                        elif zscore < -2:
+                            status = 'Pendek (< -2 SD) — indikasi risiko stunting'
+                        else:
+                            status = 'Tinggi normal (>= -2 SD)'
 
-# ---------------------------
-# Deteksi 5-19 tahun
-# ---------------------------
-if page == 'Deteksi 5-19 tahun':
-    st.header('Deteksi 5–19 tahun (WHO Growth Reference)')
-    st.info('Gunakan WHO Growth Reference (LMS).')
+            avatar_path = choose_avatar(sex_code, zscore)
+            col1, col2 = st.columns([1,2])
+            with col1:
+                if os.path.exists(avatar_path):
+                    st.image(avatar_path, width=180)
+                st.write(f"**Nama:** {nama}")
+                st.write(f"**Jenis kelamin:** {jenis_kelamin}")
+                st.write(f"**Usia:** {usia_tahun} tahun ({usia_bulan_total} bulan)")
+                st.write(f"**Tinggi:** {tinggi} cm")
+            with col2:
+                st.subheader("Hasil")
+                st.write(f"**Status (non-diagnosis):** {status}")
+                if zscore is not None:
+                    st.write(f"Z-score (H/A): {zscore:.2f}")
+                    st.write(f"Persentil: {pers:.1f} %")
+                st.info("Informasi ini bersifat edukasi, bukan diagnosis medis.")
+
+            # Simpan ke session
+            new_row = {
+                'Timestamp': datetime.datetime.now(),
+                'Nama': nama,
+                'TanggalLahir': ttl,
+                'Kelas': kelas,
+                'Sex': sex_code,
+                'UsiaTahun': usia_tahun,
+                'UsiaBulan': usia_bulan_total,
+                'Tinggi_cm': tinggi,
+                'Zscore': zscore,
+                'Persentil': pers,
+                'Status': status
+            }
+            st.session_state.measurements = pd.concat([st.session_state.measurements, pd.DataFrame([new_row])], ignore_index=True)
+
+            # PDF download
+            pdf_buf = buat_pdf_single(nama, ttl, usia_tahun, usia_bulan_total, kelas, jenis_kelamin, tinggi, zscore, pers if pers is not None else 0, status)
+            st.download_button("📄 Download Hasil PDF", data=pdf_buf, file_name=f"hasil_{nama}.pdf", mime='application/pdf')
+
+            # Excel download of all measurements
+            excel_buf = df_to_excel_bytes(st.session_state.measurements)
+            st.download_button("📥 Download Excel (semua pengukuran)", data=excel_buf, file_name='pengukuran_anak.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+            # Visualisasi (plot tinggi vs usia bulan)
+            st.subheader('Visualisasi: Tinggi vs Usia (semua data)')
+            if not st.session_state.measurements.empty:
+                df_plot = st.session_state.measurements.copy()
+                fig = px.scatter(df_plot, x='UsiaBulan', y='Tinggi_cm', color='Sex', hover_data=['Nama','Timestamp'])
+                fig.update_layout(xaxis_title='Usia (bulan)', yaxis_title='Tinggi (cm)')
+                st.plotly_chart(fig, use_container_width=True)
+
+
+elif menu == "🧒 Usia 5-19 Tahun":
+    st.title("🧒 Deteksi Usia 5-19 Tahun (WHO Growth Reference)")
 
     with st.form('form_5_19'):
-        col1, col2 = st.columns(2)
-        with col1:
-            nama = st.text_input('Nama lengkap')
-            ttl = st.date_input('Tanggal lahir', max_value=date.today())
-            jenis = st.selectbox('Jenis kelamin', ['Laki-laki','Perempuan'])
-            kelas = st.text_input('Kelas / Catatan (opsional)')
-        with col2:
-            tanggal_ukur = st.date_input('Tanggal ukur', value=date.today())
-            berat = st.number_input('Berat (kg)', min_value=0.0, step=0.01)
-            tinggi = st.number_input('Tinggi (cm)', min_value=50.0, step=0.1)
-        submitted = st.form_submit_button('Hitung & Simpan')
+        nama = st.text_input("Nama Anak")
+        ttl = st.date_input("Tanggal Lahir")
+        kelas = st.text_input("Kelas (opsional)")
+        jenis_kelamin = st.selectbox("Jenis Kelamin", ["Laki-laki","Perempuan"]) 
+        tinggi = st.number_input("Tinggi Badan (cm)", min_value=80.0, max_value=220.0, step=0.1)
+        submitted = st.form_submit_button("Proses")
 
     if submitted:
-        rec, err = process_and_store(nama, ttl, jenis, kelas, tanggal_ukur, berat, tinggi, who_5_19, age_mode='years')
-        if err:
-            st.error(err)
+        if not nama:
+            st.warning("Masukkan nama anak.")
         else:
-            st.success(f"Z-score (HAZ): {rec['z_haz']}  — Persentil global ≈ {rec['percentile']}%")
-            st.image(avatar_svg_base64('M' if jenis.startswith('L') else 'F', rec['status']), width=160)
-            st.subheader('Saran singkat (non-diagnostik)')
-            if rec['status'] in ['Severe Stunting','Stunting']:
-                st.warning('Anak berada di bawah standar tinggi menurut WHO. Pertimbangkan konsultasi dengan tenaga kesehatan, perbaikan nutrisi, dan pemeriksaan lebih lanjut.')
-            elif rec['status']=='Risk':
-                st.info('Anak sedikit di bawah median. Pantau pertumbuhan dan pastikan asupan gizi seimbang.')
-            else:
-                st.success('Tinggi anak berada di kisaran normal. Pertahankan pola makan dan aktivitas sehat.')
+            usia_tahun, usia_bulan_total = hitung_usia(ttl)
+            df_who = load_who_lms('who_standards/who_5_19.csv')
+            sex_code = 'M' if jenis_kelamin == 'Laki-laki' else 'F'
+            zscore = None
+            pers = None
+            status = 'Data standar tidak tersedia pada usia tersebut.'
 
-            if REPORTLAB_AVAILABLE:
-                pdf_buf = make_pdf_from_record(rec)
-                st.download_button('📄 Unduh Laporan PDF', data=pdf_buf, file_name=f"laporan_{rec['id']}.pdf")
+            if df_who is not None:
+                # Try matching by year first (AgeYear) or by Month if provided
+                row = None
+                if 'AgeYear' in df_who.columns:
+                    row = df_who[(df_who['AgeYear'] == usia_tahun) & (df_who['Sex'] == sex_code)]
+                if (row is None or row.empty) and 'Month' in df_who.columns:
+                    row = df_who[(df_who['Month'] == usia_bulan_total) & (df_who['Sex'] == sex_code)]
 
-# ---------------------------
-# Batch & Data
-# ---------------------------
-if page == 'Batch & Data':
-    st.header('Batch Upload & Data')
-    st.write('Unggah file Excel/CSV untuk memproses banyak anak sekaligus. Kolom saran: nama, ttl (YYYY-MM-DD), jenis_kelamin, kelas, tanggal_ukur, berat_kg, tinggi_cm')
-    uploaded = st.file_uploader('Upload .xlsx / .csv', type=['xlsx','csv'])
-    if uploaded:
-        try:
-            if uploaded.name.lower().endswith('.csv'):
-                df = pd.read_csv(uploaded)
-            else:
-                df = pd.read_excel(uploaded)
-            st.dataframe(df.head())
-            if st.button('Proses file dan simpan ke session'):
-                count = 0
-                for _, r in df.iterrows():
-                    try:
-                        nama = r.get('nama')
-                        ttl = pd.to_datetime(r.get('ttl')).date()
-                        jenis = r.get('jenis_kelamin')
-                        kelas = r.get('kelas','')
-                        tanggal_ukur = pd.to_datetime(r.get('tanggal_ukur', pd.Timestamp(date.today()))).date()
-                        berat = float(r.get('berat_kg', np.nan))
-                        tinggi = float(r.get('tinggi_cm', np.nan))
-                        days = (tanggal_ukur - ttl).days
-                        if days/365.25 < 5:
-                            who = who_0_5
-                            mode = 'months'
+                if row is not None and not row.empty:
+                    L = row['L'].values[0]
+                    M = row['M'].values[0]
+                    S = row['S'].values[0]
+                    zscore = lms_zscore(tinggi, L, M, S)
+                    if zscore is not None:
+                        pers = z_to_percentile(zscore)
+                        if zscore < -3:
+                            status = 'Sangat pendek (< -3 SD)'
+                        elif zscore < -2:
+                            status = 'Pendek (< -2 SD)'
                         else:
-                            who = who_5_19
-                            mode = 'years'
-                        rec, err = process_and_store(nama, ttl, jenis, kelas, tanggal_ukur, berat, tinggi, who, age_mode=('months' if mode=='months' else 'years'))
-                        if rec:
-                            count += 1
-                    except Exception:
-                        continue
-                st.success(f'Berhasil memproses sekitar {count} baris dan menambah ke session.')
-        except Exception as e:
-            st.error('Gagal membaca file: ' + str(e))
+                            status = 'Tinggi normal (>= -2 SD)'
 
-    st.markdown('---')
-    st.subheader('Tabel Hasil (session)')
-    st.dataframe(st.session_state.df_children)
+            avatar_path = choose_avatar(sex_code, zscore)
+            col1, col2 = st.columns([1,2])
+            with col1:
+                if os.path.exists(avatar_path):
+                    st.image(avatar_path, width=180)
+                st.write(f"**Nama:** {nama}")
+                st.write(f"**Jenis kelamin:** {jenis_kelamin}")
+                st.write(f"**Usia:** {usia_tahun} tahun ({usia_bulan_total} bulan)")
+                st.write(f"**Tinggi:** {tinggi} cm")
+            with col2:
+                st.subheader("Hasil")
+                st.write(f"**Status (non-diagnosis):** {status}")
+                if zscore is not None:
+                    st.write(f"Z-score (H/A): {zscore:.2f}")
+                    st.write(f"Persentil: {pers:.1f} %")
+                st.info("Informasi ini bersifat edukasi, bukan diagnosis medis.")
 
-# ---------------------------
-# Visualisasi
-# ---------------------------
-if page == 'Visualisasi':
-    st.header('Visualisasi Data')
-    df = st.session_state.df_children.copy()
-    if df.empty:
-        st.info('Belum ada data. Masukkan minimal 1 anak di halaman Deteksi atau unggah batch.')
-    else:
-        with st.expander('Filter'):
-            genders = st.multiselect('Jenis kelamin', options=df['jenis_kelamin'].unique(), default=list(df['jenis_kelamin'].unique()))
-            statuses = st.multiselect('Status', options=df['status'].unique(), default=list(df['status'].unique()))
-            dff = df[df['jenis_kelamin'].isin(genders) & df['status'].isin(statuses)]
+            # Simpan
+            new_row = {
+                'Timestamp': datetime.datetime.now(),
+                'Nama': nama,
+                'TanggalLahir': ttl,
+                'Kelas': kelas,
+                'Sex': sex_code,
+                'UsiaTahun': usia_tahun,
+                'UsiaBulan': usia_bulan_total,
+                'Tinggi_cm': tinggi,
+                'Zscore': zscore,
+                'Persentil': pers,
+                'Status': status
+            }
+            st.session_state.measurements = pd.concat([st.session_state.measurements, pd.DataFrame([new_row])], ignore_index=True)
 
-        st.subheader('Distribusi Status Gizi')
-        bar = px.bar(dff['status'].value_counts().reset_index().rename(columns={'index':'status','status':'count'}), x='status', y='count', color='status')
-        st.plotly_chart(bar, use_container_width=True)
+            # PDF & Excel
+            pdf_buf = buat_pdf_single(nama, ttl, usia_tahun, usia_bulan_total, kelas, jenis_kelamin, tinggi, zscore, pers if pers is not None else 0, status)
+            st.download_button("📄 Download Hasil PDF", data=pdf_buf, file_name=f"hasil_{nama}.pdf", mime='application/pdf')
+            excel_buf = df_to_excel_bytes(st.session_state.measurements)
+            st.download_button("📥 Download Excel (semua pengukuran)", data=excel_buf, file_name='pengukuran_anak.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-        st.subheader('Tinggi vs Usia (bulan)')
-        df['age_months'] = df['umur_tahun'].fillna(0).astype(int)*12 + df['umur_bulan'].fillna(0).astype(int)
-        scatter = px.scatter(df, x='age_months', y='tinggi_cm', color='status', hover_data=['nama','jenis_kelamin'])
-        st.plotly_chart(scatter, use_container_width=True)
+            # Visualisasi
+            st.subheader('Visualisasi: Tinggi vs Usia (semua data)')
+            if not st.session_state.measurements.empty:
+                df_plot = st.session_state.measurements.copy()
+                fig = px.scatter(df_plot, x='UsiaTahun', y='Tinggi_cm', color='Sex', hover_data=['Nama','Timestamp'])
+                fig.update_layout(xaxis_title='Usia (tahun)', yaxis_title='Tinggi (cm)')
+                st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader('Rata-rata Tinggi per Kelas')
-        if 'kelas' in df.columns:
-            agg = df.groupby('kelas')['tinggi_cm'].mean().reset_index().sort_values('tinggi_cm',ascending=False)
-            st.table(agg)
 
-# ---------------------------
-# Kalkulator Tinggi
-# ---------------------------
-if page == 'Kalkulator Tinggi':
-    st.header('Kalkulator Prediksi Tinggi Dewasa (Perkiraan)')
-    st.write('Metode: Mid-Parental Height (MPH). Hanya estimasi kasar.')
-    col1, col2 = st.columns(2)
-    with col1:
-        tinggi_ayah = st.number_input('Tinggi Ayah (cm)', value=170.0)
-        tinggi_ibu = st.number_input('Tinggi Ibu (cm)', value=160.0)
-    with col2:
-        jenis = st.selectbox('Jenis kelamin anak', ['Laki-laki','Perempuan'])
-        tinggi_saat_ini = st.number_input('Tinggi anak saat ini (cm)', value=100.0)
-    if st.button('Hitung Prediksi'):
-        if jenis.startswith('L'):
-            mph = (tinggi_ayah + (tinggi_ibu + 13)) / 2
+elif menu == "📜 Disclaimer":
+    st.title("📜 Disclaimer & Latar Belakang")
+    st.markdown(
+        """
+        Aplikasi ini dibuat untuk menyediakan informasi edukatif tentang status pertumbuhan anak berbasis standar WHO.
+
+        **Standar yang digunakan:**
+        - **WHO Child Growth Standards (0-5 years):** menggunakan parameter LMS (L, M, S) yang dipublikasikan WHO untuk menghitung z-score (height-for-age).
+        - **WHO Growth Reference (5-19 years):** menggunakan data referensi WHO yang juga tersedia dalam bentuk parameter LMS.
+
+        Hasil di aplikasi ini **bukan diagnosis medis**. Jika terdapat kekhawatiran terhadap pertumbuhan anak, konsultasikan ke fasilitas kesehatan.
+        """
+    )
+
+
+elif menu == "📏 Tutorial Pengukuran":
+    st.title("📏 Tutorial Mengukur Tinggi Badan Anak yang Benar")
+    st.markdown(
+        """
+        1. Pastikan anak berdiri tegak tanpa sepatu.
+        2. Kepala, bahu, pantat, dan tumit menempel pada dinding atau alat ukur.
+        3. Pandangan lurus ke depan (Frankfurt plane).
+        4. Gunakan alat ukur yang terkalibrasi dan catat dalam satuan cm.
+        5. Untuk anak <2 tahun biasanya diukur dalam posisi berbaring (length) — pastikan standar data yang dipakai sesuai (length vs height).
+        """
+    )
+
+
+elif menu == "📐 Prediksi Tinggi Anak":
+    st.title("📐 Kalkulator Prediksi Tinggi Anak (Mid-parental height)")
+    ayah = st.number_input("Tinggi Ayah (cm)", min_value=100.0, max_value=250.0, value=170.0)
+    ibu = st.number_input("Tinggi Ibu (cm)", min_value=100.0, max_value=250.0, value=160.0)
+    jk_balita = st.selectbox("Jenis Kelamin Anak", ["Laki-laki","Perempuan"])
+
+    if st.button('Prediksi'):
+        if jk_balita == 'Laki-laki':
+            pred = (ayah + ibu + 13) / 2
         else:
-            mph = ((tinggi_ayah - 13) + tinggi_ibu) / 2
-        lower = mph - 8.5
-        upper = mph + 8.5
-        st.success(f'Perkiraan tinggi dewasa: {mph:.1f} cm (kisaran {lower:.1f} — {upper:.1f} cm)')
-        st.info('Faktor nutrisi, penyakit, dan lingkungan mempengaruhi realisasi tinggi.')
+            pred = (ayah + ibu - 13) / 2
+        st.success(f"Prediksi tinggi optimal: {pred:.1f} cm")
+        st.write(f"Perkiraan rentang (±5 cm): {pred-5:.1f} - {pred+5:.1f} cm")
 
-# ---------------------------
-# Tutorial Pengukuran
-# ---------------------------
-if page == 'Tutorial Pengukuran':
-    st.header('Tutorial: Cara Mengukur Berat & Tinggi yang Benar')
-    st.markdown('''
-1. Berat: gunakan timbangan terkalibrasi, anak melepas pakaian tebal dan sepatu.
-2. Panjang (<2 tahun): ukur berbaring (recumbent length) dengan infantometer.
-3. Tinggi (>=2 tahun): ukur berdiri tanpa sepatu, tumit rapat, kepala pada plane Frankfort.
-4. Catat tanggal lahir & tanggal ukur dengan benar.
-5. Ulangi 2 kali bila perlu, catat kondisi anak.
-''')
-    st.info('Rujuk pedoman WHO untuk panduan pengukuran antropometri lengkap.')
 
-# ---------------------------
-# Disclaimer
-# ---------------------------
-if page == 'Disclaimer':
-    st.header('Disclaimer & Latar Belakang')
-    st.markdown('''
-Aplikasi ini dibuat untuk tujuan edukasi dan pemantauan. Standar yang dipakai:
-- WHO Child Growth Standards (0–5 years): LMS tables (Height-for-age, Weight-for-age, etc.)
-- WHO Growth Reference (5–19 years): LMS tables (Height-for-age, BMI-for-age, etc.)
+# Footer: Tampilkan tabel sementara
+st.sidebar.markdown('---')
+st.sidebar.subheader('Data pengukuran (sementara)')
+if not st.session_state.measurements.empty:
+    st.sidebar.write(st.session_state.measurements[['Nama','TanggalLahir','UsiaTahun','Tinggi_cm','Status']].tail(5))
+else:
+    st.sidebar.write('Belum ada data')
 
-Hasil yang diberikan **bukan diagnosis medis**. Untuk keputusan klinis, rujuk tenaga kesehatan.
 
-Teknis: letakkan file LMS WHO pada folder `who_standards/` dengan nama `who_0_5.csv` dan `who_5_19.csv`.
-''')
+# End of app
 
-# End of file
+
+# -------------------------
+# File: requirements.txt (tambahkan ke repo atau gunakan pip install -r)
+# -------------------------
+
+# streamlit
+# pandas
+# numpy
+# plotly
+# reportlab
+# xlsxwriter
+# scipy
+
