@@ -372,7 +372,7 @@ elif page == "Disclaimer":
 
     ''')
     st.markdown('---')
-    st.markdown('**Petunjuk teknis untuk developer / operator:**
+    st.markdown('**Petunjuk teknis untuk developer / operator:**'
     1. Unduh data LMS WHO dari situs WHO (format CSV) dan simpan di folder `data/` seperti disebut di atas.
     2. Pastikan library `reportlab` (opsional untuk PDF), `plotly` (opsional), dan `scipy` terinstall.
     3. Jalankan: `pip install streamlit pandas numpy scipy reportlab plotly openpyxl`')
