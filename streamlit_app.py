@@ -225,31 +225,28 @@ if submit:
     
     st.pyplot(fig)
 
-# -------------------------------
-# Grafik distribusi Z-score per kategori status
-# -------------------------------
-    st.subheader("🎯 Distribusi Z-score per Kategori Status Gizi")
+    # -------------------------------
+    # Grafik Distribusi Z-score Berdasarkan Status Gizi
+    # -------------------------------
+    st.subheader("📈 Distribusi Z-score Berdasarkan Kategori Status Gizi")
     
-    status_color_map = {
-        "Severely Stunted": "darkred",
-        "Stunted": "red",
-        "Perlu Perhatian": "orange",
-        "Normal": "green",
-        "Tall": "blue"
-    }
+    # Hitung rata-rata Z-score per status dan jumlahnya
+    df_status_z = df_all.groupby("Status")["Z-score"].count().reindex(status_order, fill_value=0)
     
-    fig, ax = plt.subplots(figsize=(8, 5))
+    # Buat bar chart dengan warna per kategori
+    fig3, ax3 = plt.subplots(figsize=(8, 5))
+    bars = ax3.bar(df_status_z.index, df_status_z.values, 
+                   color=[status_color_map[s] for s in df_status_z.index])
     
-    for status in status_order:
-        subset = df_all[df_all["Status"] == status]
-        ax.scatter(subset["Z-score"], [status] * len(subset),
-                   color=status_color_map[status],
-                   label=status if status not in ax.get_legend_handles_labels()[1] else "")
+    ax3.set_ylabel("Jumlah Anak")
+    ax3.set_xlabel("Kategori Status")
+    ax3.set_title("Distribusi Anak Berdasarkan Status Gizi (Z-score)")
+    ax3.set_ylim(0, max(df_status_z.values) + 1)
     
-    ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted")
-    ax.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted")
-    ax.set_xlabel("Z-score")
-    ax.set_ylabel("Kategori Status")
-    ax.set_title("Distribusi Z-score Berdasarkan Kategori Status Gizi")
-    ax.legend(loc="upper right")
-    st.pyplot(fig)
+    # Tambah label jumlah di atas batang
+    for bar in bars:
+        height = bar.get_height()
+        ax3.text(bar.get_x() + bar.get_width()/2, height + 0.05, int(height),
+                 ha="center", va="bottom", fontsize=10, fontweight="bold")
+    
+    st.pyplot(fig3)
