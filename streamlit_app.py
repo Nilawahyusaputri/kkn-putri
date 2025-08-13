@@ -116,7 +116,7 @@ def buat_pdf(data, gender):
 
     # Logo
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", 10, 8, 20)
+        pdf.image("logo.png", 4, 4, 20)
     pdf.set_font("Arial", "B", 16)
     pdf.cell(200, 10, txt="Hasil Deteksi Pertumbuhan Anak", ln=True, align="C")
     pdf.ln(10)
