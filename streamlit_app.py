@@ -236,9 +236,7 @@ if submit:
             return "Severely Stunted"
         elif -3 <= z < -2:
             return "Stunted"
-        elif -2 <= z < -1:
-            return "Perlu Perhatian"
-        elif -1 <= z <= 3:
+        elif -2 <= z <= 2:
             return "Normal"
         else:
             return "Tall"
@@ -266,8 +264,8 @@ if submit:
     # Garis batas kategori WHO
     ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted (-3)")
     ax.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted (-2)")
-    ax.axvline(x=-1, color="orange", linestyle="--", label="Batas Perlu Perhatian (-1)")
-    ax.axvline(x=3, color="blue", linestyle="--", label="Batas Tall (3)")
+    ax.axvline(x=2, color="blue", linestyle="--", label="Tinggi (Tall) (+2)")
+    ax.axvline(x=3, color="blue", linestyle="--", label="Sangat Tinggi (Very Tall) (+3)")
     
     # Label dan judul
     ax.set_xlabel("Z-score")
