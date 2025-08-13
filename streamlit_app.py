@@ -224,3 +224,32 @@ if submit:
                 int(df_counts["Perempuan"].iloc[i]), ha="center", va="bottom", fontsize=9)
     
     st.pyplot(fig)
+
+# -------------------------------
+# Grafik distribusi Z-score per kategori status
+# -------------------------------
+    st.subheader("🎯 Distribusi Z-score per Kategori Status Gizi")
+    
+    status_color_map = {
+        "Severely Stunted": "darkred",
+        "Stunted": "red",
+        "Perlu Perhatian": "orange",
+        "Normal": "green",
+        "Tall": "blue"
+    }
+    
+    fig, ax = plt.subplots(figsize=(8, 5))
+    
+    for status in status_order:
+        subset = df_all[df_all["Status"] == status]
+        ax.scatter(subset["Z-score"], [status] * len(subset),
+                   color=status_color_map[status],
+                   label=status if status not in ax.get_legend_handles_labels()[1] else "")
+    
+    ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted")
+    ax.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted")
+    ax.set_xlabel("Z-score")
+    ax.set_ylabel("Kategori Status")
+    ax.set_title("Distribusi Z-score Berdasarkan Kategori Status Gizi")
+    ax.legend(loc="upper right")
+    st.pyplot(fig)
