@@ -41,7 +41,7 @@ def load_lms(gender):
 # -------------------------------
 def hitung_zscore(umur_bulan, tinggi, gender):
     lms_df = load_lms(gender)
-    # Interpolasi jika umur tidak ada di data
+    # Interpolasi umur
     lms_df = lms_df.set_index("UmurBulan").reindex(
         range(lms_df["UmurBulan"].min(), lms_df["UmurBulan"].max() + 1)
     ).interpolate()
@@ -176,30 +176,41 @@ if st.session_state.data_anak:
     csv = df_all.to_csv(index=False).encode("utf-8")
     st.download_button("📥 Download Semua Data (CSV)", csv, file_name="data_semua_anak.csv", mime="text/csv")
 
-    # Grafik 1: Bar Chart berdasarkan kategori status
-    st.subheader("📊 Distribusi Status Pertumbuhan Anak")
+    # Grafik 1: Distribusi Status Berdasarkan Gender (Grouped Bar)
+    st.subheader("📊 Distribusi Status Pertumbuhan Berdasarkan Gender")
     status_order = ["Severely Stunted", "Stunted", "Perlu Perhatian", "Normal", "Tall"]
     color_map = {
-        "Severely Stunted": "darkred",
-        "Stunted": "red",
-        "Perlu Perhatian": "orange",
-        "Normal": "green",
-        "Tall": "blue"
+        "Laki-laki": "royalblue",
+        "Perempuan": "pink"
     }
-    status_counts = df_all["Status"].value_counts().reindex(status_order).fillna(0)
-    fig1, ax1 = plt.subplots()
-    bars = ax1.bar(status_counts.index, status_counts.values, color=[color_map[s] for s in status_counts.index])
-    ax1.set_ylabel("Jumlah Anak")
-    ax1.set_xlabel("Kategori Status")
-    ax1.set_title("Distribusi Anak Berdasarkan Status Pertumbuhan")
-    ax1.set_ylim(0, max(status_counts.values) + 1)
 
-    # Tambah anotasi jumlah di atas batang
-    for bar in bars:
-        height = bar.get_height()
-        ax1.text(bar.get_x() + bar.get_width() / 2, height + 0.1, int(height),
-                 ha='center', va='bottom', fontsize=10, fontweight='bold')
-    st.pyplot(fig1)
+    # Hitung jumlah berdasarkan status dan gender
+    grouped_counts = df_all.groupby(["Status", "Jenis Kelamin"]).size().unstack(fill_value=0).reindex(status_order)
+
+    fig, ax = plt.subplots()
+    bar_width = 0.35
+    index = np.arange(len(status_order))
+
+    bars1 = ax.bar(index - bar_width/2, grouped_counts.get("Laki-laki", [0]*len(status_order)), 
+                   bar_width, label="Laki-laki", color=color_map["Laki-laki"])
+    bars2 = ax.bar(index + bar_width/2, grouped_counts.get("Perempuan", [0]*len(status_order)), 
+                   bar_width, label="Perempuan", color=color_map["Perempuan"])
+
+    ax.set_xlabel("Kategori Status")
+    ax.set_ylabel("Jumlah Anak")
+    ax.set_title("Distribusi Anak Berdasarkan Status dan Gender")
+    ax.set_xticks(index)
+    ax.set_xticklabels(status_order, rotation=15)
+    ax.legend()
+
+    # Tambah label di atas batang
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2, height + 0.05, int(height),
+                    ha='center', va='bottom', fontsize=9)
+
+    st.pyplot(fig)
 
     # Grafik 2: Histogram Z-score
     st.subheader("📈 Distribusi Z-score Anak")
