@@ -238,8 +238,10 @@ if submit:
             return "Stunted"
         elif -2 <= z <= 2:
             return "Normal"
-        else:
+        elif 2 <= z <= 3:
             return "Tall"
+        else:
+            return "Very Tall"
     
     # Mapping warna
     color_map = {
