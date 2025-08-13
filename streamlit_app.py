@@ -61,12 +61,12 @@ def klasifikasi_hfa(z):
         return "Severely Stunted", "darkred", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
     elif -3 <= z < -2:
         return "Stunted", "red", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
-    elif -2 <= z < 2:
+    elif -2 <= z < -1:
+        return "Perlu Perhatian", "orange", "Tingkatkan kualitas makan dan aktivitas fisik."
+    elif -1 <= z <= 3:
         return "Normal", "green", "Pertahankan pola makan sehat dan gaya hidup aktif."
-    elif 2 <= z < 3:
-        return "Tall", "blue", "Anak lebih tinggi dari rata-rata, pastikan asupan gizi tetap seimbang."
-    else:  # z >= 3
-        return "Very Tall", "purple", "Anak sangat tinggi untuk usianya, perhatikan pola pertumbuhan."
+    else:
+        return "Tall", "blue", "Jaga keseimbangan gizi dan aktivitas."
 
 # -------------------------------
 # Mapping Avatar
@@ -243,16 +243,14 @@ if submit:
         else:
             return "Very Tall"
     
-        # Mapping warna
-        color_map = {
-            "Severely Stunted": "darkred",
-            "Stunted": "red",
-            "Perlu Perhatian": "orange",
-            "Normal": "green",
-            "Tall": "blue",
-            "Very Tall": "purple"  # tambahan untuk menghindari KeyError
-        }
-
+    # Mapping warna
+    color_map = {
+        "Severely Stunted": "darkred",
+        "Stunted": "red",
+        "Perlu Perhatian": "orange",
+        "Normal": "green",
+        "Tall": "blue"
+    }
     
     # Tambahkan kolom kategori di dataframe
     df_all["Kategori Z-score"] = df_all["Z-score"].apply(kategori_zscore)
@@ -263,7 +261,7 @@ if submit:
     # Plot manual
     fig, ax = plt.subplots(figsize=(8, 5))
     for idx, row in df_zscore_counts.iterrows():
-        ax.bar(row["Z-score"], row["Jumlah"], color=color_map.get(row["Kategori Z-score"], "gray"), width=0.15)
+        ax.bar(row["Z-score"], row["Jumlah"], color=color_map[row["Kategori Z-score"]], width=0.15)
     
     # Garis batas kategori WHO
     ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted (-3)")
@@ -278,3 +276,6 @@ if submit:
     ax.legend()
     
     st.pyplot(fig)
+
+
+pada code ini kenapa anak perempuan 10 tahun termasuk normal, tdk tinggi
