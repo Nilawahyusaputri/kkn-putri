@@ -9,3 +9,4 @@ Pillow
 scipy
 altair
 fpdf
+python-dateutil
