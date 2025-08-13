@@ -162,16 +162,35 @@ def hitung_zscore(umur_bulan, tinggi, gender):
 # Klasifikasi WHO (HFA)
 
 def klasifikasi_hfa(z):
+    # warna kotak soft pastel, warna shadow lebih gelap
     if z < -3:
-        return "Severely Stunted", "#8B0000", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
+        return "Severely Stunted", "#FFB3B3", "#8B0000", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
     elif -3 <= z < -2:
-        return "Stunted", "#FF4B4B", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
+        return "Stunted", "#FFCCCC", "#FF4B4B", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
     elif -2 <= z <= 2:
-        return "Normal", "#4CAF50", "Pertahankan pola makan sehat dan gaya hidup aktif."
+        return "Normal", "#B3FFB3", "#4CAF50", "Pertahankan pola makan sehat dan gaya hidup aktif."
     elif 2 < z <= 3:
-        return "Tall", "#1E90FF", "Jaga keseimbangan gizi dan aktivitas."
+        return "Tall", "#B3D9FF", "#1E90FF", "Jaga keseimbangan gizi dan aktivitas."
     else:
-        return "Very Tall", "#800080", "Periksa ke tenaga kesehatan jika tinggi badan anak terlalu jauh di atas rata-rata."
+        return "Very Tall", "#D9B3FF", "#800080", "Periksa ke tenaga kesehatan jika tinggi badan anak terlalu jauh di atas rata-rata."
+
+# Menampilkan kotak hasil HFA
+status, warna_kotak, warna_shadow, saran = klasifikasi_hfa(z_score)
+
+st.markdown(f"""
+<div style="
+    background-color:{warna_kotak};
+    padding:20px;
+    border-radius:15px;
+    box-shadow: 5px 5px 15px {warna_shadow}, -5px -5px 15px #ffffff;
+    color:#333;
+    text-align:center;
+    font-weight:bold;
+">
+    <h3>{status}</h3>
+    <p style="font-weight:normal">{saran}</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Avatar map
 avatar_map = {
