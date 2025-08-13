@@ -79,24 +79,7 @@ avatar_map = {
 }
 
 # -------------------------------
-# Fungsi Buat PDF
-# -------------------------------
-def buat_pdf(data):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt="Hasil Deteksi Stunting Anak", ln=True, align="C")
-    pdf.ln(5)
-    pdf.set_font("Arial", size=12)
-    for key, value in data.items():
-        pdf.cell(0, 10, f"{key}: {value}", ln=True)
-    os.makedirs("pdf", exist_ok=True)
-    nama_file = f"pdf/Hasil_{data['Nama Anak'].replace(' ', '_')}.pdf"
-    pdf.output(nama_file)
-    return nama_file
-
-# -------------------------------
-# === Fitur Baru: Fungsi Load Percentile WHO ===
+# Fungsi Load Percentile WHO
 # -------------------------------
 def load_percentile(gender):
     if gender == "Laki-laki":
@@ -107,7 +90,7 @@ def load_percentile(gender):
     return df
 
 # -------------------------------
-# === Fitur Baru: Fungsi Hitung Percentil ===
+# Fungsi Hitung Percentil
 # -------------------------------
 def hitung_percentil(umur_bulan, tinggi, gender):
     df = load_percentile(gender)
@@ -123,6 +106,66 @@ def hitung_percentil(umur_bulan, tinggi, gender):
     selisih = [abs(tinggi - t) for t in tinggi_list]
     idx_min = np.argmin(selisih)
     return percentil_angka[idx_min]
+
+# -------------------------------
+# Fungsi Buat PDF (Versi Rapi dengan Logo, Tabel, dan Grafik)
+# -------------------------------
+def buat_pdf(data, gender):
+    pdf = FPDF()
+    pdf.add_page()
+
+    # Logo
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 8, 30)
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, txt="Hasil Deteksi Pertumbuhan Anak", ln=True, align="C")
+    pdf.ln(10)
+
+    # Tabel Data
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Data Anak", ln=True)
+    pdf.set_font("Arial", size=11)
+    for key, value in data.items():
+        pdf.cell(60, 8, f"{key}", 1)
+        pdf.cell(0, 8, f"{value}", 1, ln=True)
+    pdf.ln(5)
+
+    # Interpretasi Percentil
+    if isinstance(data["Persentil"], (int, float)):
+        posisi = 100 - data["Persentil"]
+        pdf.multi_cell(0, 8,
+            f"Anak berada pada percentil {data['Persentil']} untuk tinggi badan. "
+            f"Artinya, anak ini lebih tinggi dari sekitar {data['Persentil']}% anak seusianya "
+            f"di seluruh dunia, dan {posisi}% anak memiliki tinggi lebih tinggi.")
+    pdf.ln(5)
+
+    # Ilustrasi teks
+    pdf.multi_cell(0, 8,
+        "Ilustrasi: Posisi anak digambarkan pada kurva pertumbuhan WHO, "
+        "di mana garis merah menandakan tinggi anak Anda, dan garis lainnya adalah percentil standar.")
+
+    # Grafik Percentil
+    df_percentil = load_percentile(gender)
+    plt.figure(figsize=(6,4))
+    for col in ["P3","P15","P50","P85","P97"]:
+        plt.plot(df_percentil["UmurBulan"], df_percentil[col], label=col)
+    plt.scatter([data["Umur (bulan)"]], [data["Tinggi Badan (cm)"]], color="red", zorder=5, label="Anak Anda")
+    plt.title(f"Kurva Pertumbuhan ({gender})")
+    plt.xlabel("Umur (bulan)")
+    plt.ylabel("Tinggi (cm)")
+    plt.legend()
+    plt.tight_layout()
+
+    grafik_path = "grafik_temp.png"
+    plt.savefig(grafik_path)
+    plt.close()
+    if os.path.exists(grafik_path):
+        pdf.image(grafik_path, x=20, w=170)
+
+    os.makedirs("pdf", exist_ok=True)
+    nama_file = f"pdf/Hasil_{data['Nama Anak'].replace(' ', '_')}.pdf"
+    pdf.output(nama_file)
+    return nama_file
 
 # -------------------------------
 # Form Input Data
@@ -149,18 +192,16 @@ if "data_anak" not in st.session_state:
 # -------------------------------
 if submit:
     tahun, bulan, hari, umur_bulan = hitung_umur(tgl_lahir)
-
     if umur_bulan < 61:
         st.warning("⚠️ Anak berusia di bawah 5 tahun. Gunakan standar WHO 2006 untuk hasil yang lebih tepat.")
 
     z = hitung_zscore(umur_bulan, tinggi, gender)
-
     if z is None:
         st.warning("Umur belum tersedia dalam standar WHO 2007.")
     else:
         status, warna, tips = klasifikasi_hfa(z)
 
-        # === Fitur Baru: Hitung Percentil ===
+        # Hitung Percentil
         percentil_value = hitung_percentil(umur_bulan, tinggi, gender)
         if percentil_value is not None:
             if percentil_value < 3:
@@ -181,6 +222,7 @@ if submit:
         st.write(f"**Z-score HFA:** {z}")
         if kategori_percentil:
             st.write(f"**Persentil Tinggi:** {percentil_value} → {kategori_percentil}")
+            st.write(f"Anak ini lebih tinggi dari {percentil_value}% anak seusianya di dunia.")
         st.markdown(
             f"<div style='background-color:{warna}; padding:10px; border-radius:10px; color:white;'>"
             f"<b>Status: {status}</b><br/><i>{tips}</i></div>", unsafe_allow_html=True
@@ -207,11 +249,11 @@ if submit:
         }
         st.session_state.data_anak.append(hasil_data)
 
-        pdf_path = buat_pdf(hasil_data)
+        pdf_path = buat_pdf(hasil_data, gender)
         with open(pdf_path, "rb") as f:
             st.download_button("📥 Download PDF Hasil Anak Ini", f, file_name=os.path.basename(pdf_path))
 
-        # === Fitur Baru: Plot Posisi Anak di Kurva Pertumbuhan ===
+        # Plot Posisi Anak di Kurva Pertumbuhan
         df_percentil = load_percentile(gender)
         plt.figure(figsize=(8,5))
         for col in ["P3","P15","P50","P85","P97"]:
@@ -243,24 +285,20 @@ if st.session_state.data_anak:
 
     x = np.arange(len(status_order))
     width = 0.35
-
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(x - width/2, df_counts["Laki-laki"], width, label="Laki-laki", color="skyblue")
     ax.bar(x + width/2, df_counts["Perempuan"], width, label="Perempuan", color="pink")
-
     ax.set_ylabel("Jumlah Anak")
     ax.set_xlabel("Kategori Status")
     ax.set_title("Distribusi Status Gizi Berdasarkan Gender")
     ax.set_xticks(x)
     ax.set_xticklabels(status_order, rotation=20)
     ax.legend()
-
     for i in range(len(status_order)):
         ax.text(x[i] - width/2, df_counts["Laki-laki"].iloc[i] + 0.05,
                 int(df_counts["Laki-laki"].iloc[i]), ha="center", va="bottom", fontsize=9)
         ax.text(x[i] + width/2, df_counts["Perempuan"].iloc[i] + 0.05,
                 int(df_counts["Perempuan"].iloc[i]), ha="center", va="bottom", fontsize=9)
-
     st.pyplot(fig)
 
     st.subheader("📈 Distribusi Z-score dengan Kategori Warna")
@@ -283,22 +321,17 @@ if st.session_state.data_anak:
         "Tall": "blue",
         "Very Tall": "purple"
     }
-
     df_all["Kategori Z-score"] = df_all["Z-score"].apply(kategori_zscore)
     df_zscore_counts = df_all.groupby(["Z-score", "Kategori Z-score"]).size().reset_index(name="Jumlah")
-
     fig, ax = plt.subplots(figsize=(8, 5))
     for idx, row in df_zscore_counts.iterrows():
         ax.bar(row["Z-score"], row["Jumlah"], color=color_map[row["Kategori Z-score"]], width=0.15)
-
     ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted (-3)")
     ax.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted (-2)")
     ax.axvline(x=2, color="green", linestyle="--", label="Batas Normal/Tall (+2)")
     ax.axvline(x=3, color="blue", linestyle="--", label="Batas Tall/Very Tall (+3)")
-
     ax.set_xlabel("Z-score")
     ax.set_ylabel("Jumlah Anak")
     ax.set_title("Distribusi Z-score Anak Berdasarkan Kategori")
     ax.legend()
-
     st.pyplot(fig)
