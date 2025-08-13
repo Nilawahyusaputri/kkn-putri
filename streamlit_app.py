@@ -163,15 +163,34 @@ def hitung_zscore(umur_bulan, tinggi, gender):
 
 def klasifikasi_hfa(z):
     if z < -3:
-        return "Severely Stunted", "#8B0000", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
+        return "Severely Stunted", "#FFC1C1", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."  # pastel merah
     elif -3 <= z < -2:
-        return "Stunted", "#FF4B4B", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
+        return "Stunted", "#FFB6B6", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."  # pastel merah muda
     elif -2 <= z <= 2:
-        return "Normal", "#4CAF50", "Pertahankan pola makan sehat dan gaya hidup aktif."
+        return "Normal", "#C1FFC1", "Pertahankan pola makan sehat dan gaya hidup aktif."  # pastel hijau
     elif 2 < z <= 3:
-        return "Tall", "#1E90FF", "Jaga keseimbangan gizi dan aktivitas."
+        return "Tall", "#ADD8FF", "Jaga keseimbangan gizi dan aktivitas."  # pastel biru
     else:
-        return "Very Tall", "#800080", "Periksa ke tenaga kesehatan jika tinggi badan anak terlalu jauh di atas rata-rata."
+        return "Very Tall", "#E0B0FF", "Periksa ke tenaga kesehatan jika tinggi badan anak terlalu jauh di atas rata-rata."  # pastel ungu
+
+# Tampilan neumorphism dengan background pastel
+status, warna, saran = klasifikasi_hfa(z_score)
+
+st.markdown(f"""
+<div style="
+    background-color:{warna};
+    padding:20px;
+    border-radius:15px;
+    box-shadow: 8px 8px 15px #bebebe, -8px -8px 15px #ffffff;
+    color:#333333;
+    text-align:center;
+    font-weight:bold;
+    font-size:18px;
+">
+    <h3>{status}</h3>
+    <p style='font-weight:normal; font-size:14px;'>{saran}</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Avatar map
 avatar_map = {
