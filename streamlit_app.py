@@ -41,7 +41,7 @@ def load_lms(gender):
 # -------------------------------
 def hitung_zscore(umur_bulan, tinggi, gender):
     lms_df = load_lms(gender)
-    # Interpolasi umur
+    # Interpolasi jika umur tidak ada di data
     lms_df = lms_df.set_index("UmurBulan").reindex(
         range(lms_df["UmurBulan"].min(), lms_df["UmurBulan"].max() + 1)
     ).interpolate()
@@ -176,39 +176,34 @@ if st.session_state.data_anak:
     csv = df_all.to_csv(index=False).encode("utf-8")
     st.download_button("📥 Download Semua Data (CSV)", csv, file_name="data_semua_anak.csv", mime="text/csv")
 
-    # Grafik 1: Distribusi Status Berdasarkan Gender (Grouped Bar)
-    st.subheader("📊 Distribusi Status Pertumbuhan Berdasarkan Gender")
+    # Grafik 1: Distribusi Status per Gender (Grouped Bar Chart)
+    st.subheader("📊 Distribusi Status Pertumbuhan Anak Berdasarkan Gender")
     status_order = ["Severely Stunted", "Stunted", "Perlu Perhatian", "Normal", "Tall"]
     color_map = {
-        "Laki-laki": "royalblue",
-        "Perempuan": "pink"
+        "Laki-laki": "dodgerblue",
+        "Perempuan": "orchid"
     }
 
-    # Hitung jumlah berdasarkan status dan gender
-    grouped_counts = df_all.groupby(["Status", "Jenis Kelamin"]).size().unstack(fill_value=0).reindex(status_order)
+    df_counts = df_all.groupby(["Status", "Jenis Kelamin"]).size().unstack(fill_value=0).reindex(status_order)
+    fig, ax = plt.subplots(figsize=(8, 5))
 
-    fig, ax = plt.subplots()
-    bar_width = 0.35
-    index = np.arange(len(status_order))
+    x = np.arange(len(status_order))
+    width = 0.35
+    ax.bar(x - width/2, df_counts["Laki-laki"], width, label="Laki-laki", color=color_map["Laki-laki"])
+    ax.bar(x + width/2, df_counts["Perempuan"], width, label="Perempuan", color=color_map["Perempuan"])
 
-    bars1 = ax.bar(index - bar_width/2, grouped_counts.get("Laki-laki", [0]*len(status_order)), 
-                   bar_width, label="Laki-laki", color=color_map["Laki-laki"])
-    bars2 = ax.bar(index + bar_width/2, grouped_counts.get("Perempuan", [0]*len(status_order)), 
-                   bar_width, label="Perempuan", color=color_map["Perempuan"])
-
-    ax.set_xlabel("Kategori Status")
     ax.set_ylabel("Jumlah Anak")
-    ax.set_title("Distribusi Anak Berdasarkan Status dan Gender")
-    ax.set_xticks(index)
-    ax.set_xticklabels(status_order, rotation=15)
+    ax.set_xlabel("Kategori Status")
+    ax.set_title("Distribusi Anak Berdasarkan Status Gizi dan Gender")
+    ax.set_xticks(x)
+    ax.set_xticklabels(status_order)
     ax.legend()
 
-    # Tambah label di atas batang
-    for bars in [bars1, bars2]:
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2, height + 0.05, int(height),
-                    ha='center', va='bottom', fontsize=9)
+    # Label di atas bar
+    for i, val in enumerate(df_counts["Laki-laki"]):
+        ax.text(i - width/2, val + 0.1, str(val), ha='center', va='bottom', fontsize=9, fontweight='bold')
+    for i, val in enumerate(df_counts["Perempuan"]):
+        ax.text(i + width/2, val + 0.1, str(val), ha='center', va='bottom', fontsize=9, fontweight='bold')
 
     st.pyplot(fig)
 
