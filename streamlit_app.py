@@ -277,5 +277,3 @@ if submit:
     
     st.pyplot(fig)
 
-
-pada code ini kenapa anak perempuan 10 tahun termasuk normal, tdk tinggi
