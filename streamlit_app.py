@@ -244,13 +244,15 @@ if submit:
             return "Very Tall"
     
     # Mapping warna
-    color_map = {
+       color_map = {
         "Severely Stunted": "darkred",
         "Stunted": "red",
         "Perlu Perhatian": "orange",
         "Normal": "green",
-        "Tall": "blue"
+        "Tall": "blue",
+        "Very Tall": "purple"  # Tambahan untuk menghindari KeyError
     }
+
     
     # Tambahkan kolom kategori di dataframe
     df_all["Kategori Z-score"] = df_all["Z-score"].apply(kategori_zscore)
@@ -261,7 +263,7 @@ if submit:
     # Plot manual
     fig, ax = plt.subplots(figsize=(8, 5))
     for idx, row in df_zscore_counts.iterrows():
-        ax.bar(row["Z-score"], row["Jumlah"], color=color_map[row["Kategori Z-score"]], width=0.15)
+        ax.bar(row["Z-score"], row["Jumlah"], color=color_map.get(row["Kategori Z-score"], "gray"), width=0.15)
     
     # Garis batas kategori WHO
     ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted (-3)")
