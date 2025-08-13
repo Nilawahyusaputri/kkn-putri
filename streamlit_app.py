@@ -30,9 +30,9 @@ def hitung_umur(tgl_lahir):
 # -------------------------------
 def load_lms(gender):
     if gender == "Laki-laki":
-        df = pd.read_excel("data/hfa-boys-z-who-2007-exp.xlsx")
+        df = pd.read_excel("data/hfa-boy-z.xlsx")
     else:
-        df = pd.read_excel("data/hfa-girls-z-who-2007-exp.xlsx")
+        df = pd.read_excel("data/hfa-girl-z.xlsx")
     df = df.rename(columns={"Month": "UmurBulan"})
     return df
 
