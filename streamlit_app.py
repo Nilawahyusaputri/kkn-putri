@@ -165,55 +165,62 @@ if submit:
         with open(pdf_path, "rb") as f:
             st.download_button("📥 Download PDF Hasil Anak Ini", f, file_name=os.path.basename(pdf_path))
 
-# -------------------------------
-# Visualisasi Data Semua Anak
-# -------------------------------
-if st.session_state.data_anak:
-    st.subheader("📋 Data Semua Anak yang Sudah Diperiksa")
-    df_all = pd.DataFrame(st.session_state.data_anak)
-    st.dataframe(df_all, use_container_width=True)
-
-    csv = df_all.to_csv(index=False).encode("utf-8")
-    st.download_button("📥 Download Semua Data (CSV)", csv, file_name="data_semua_anak.csv", mime="text/csv")
-
-    # Grafik 1: Distribusi Status per Gender (Grouped Bar Chart)
-    st.subheader("📊 Distribusi Status Pertumbuhan Anak Berdasarkan Gender")
+    # -------------------------------
+    # Visualisasi Data Semua Anak
+    # -------------------------------
+    if st.session_state.data_anak:
+        st.subheader("📋 Data Semua Anak yang Sudah Diperiksa")
+        df_all = pd.DataFrame(st.session_state.data_anak)
+        st.dataframe(df_all, use_container_width=True)
+    
+        csv = df_all.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download Semua Data (CSV)", csv, file_name="data_semua_anak.csv", mime="text/csv")
+    
+        # -------------------------------
+    # Chart distribusi status gizi per gender
+    # -------------------------------
+    st.subheader("📊 Distribusi Status Gizi Berdasarkan Gender")
+    
     status_order = ["Severely Stunted", "Stunted", "Perlu Perhatian", "Normal", "Tall"]
-    color_map = {
-        "Laki-laki": "dodgerblue",
-        "Perempuan": "orchid"
+    gender_order = ["Laki-laki", "Perempuan"]
+    
+    # Hitung jumlah anak berdasarkan Status dan Gender
+    df_counts = df_all.groupby(["Status", "Jenis Kelamin"]).size().unstack(fill_value=0)
+    
+    # Pastikan urutan dan kolom tetap ada meskipun kosong
+    df_counts = df_counts.reindex(index=status_order, columns=gender_order, fill_value=0)
+    
+    # Warna untuk status gizi
+    status_color_map = {
+        "Severely Stunted": "darkred",
+        "Stunted": "red",
+        "Perlu Perhatian": "orange",
+        "Normal": "green",
+        "Tall": "blue"
     }
-
-    df_counts = df_all.groupby(["Status", "Jenis Kelamin"]).size().unstack(fill_value=0).reindex(status_order)
-    fig, ax = plt.subplots(figsize=(8, 5))
-
+    
+    # Lebar batang dan posisi
+    import numpy as np
     x = np.arange(len(status_order))
     width = 0.35
-    ax.bar(x - width/2, df_counts["Laki-laki"], width, label="Laki-laki", color=color_map["Laki-laki"])
-    ax.bar(x + width/2, df_counts["Perempuan"], width, label="Perempuan", color=color_map["Perempuan"])
-
+    
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(x - width/2, df_counts["Laki-laki"], width, label="Laki-laki", color="skyblue")
+    ax.bar(x + width/2, df_counts["Perempuan"], width, label="Perempuan", color="pink")
+    
+    # Label dan judul
     ax.set_ylabel("Jumlah Anak")
     ax.set_xlabel("Kategori Status")
-    ax.set_title("Distribusi Anak Berdasarkan Status Gizi dan Gender")
+    ax.set_title("Distribusi Status Gizi Berdasarkan Gender")
     ax.set_xticks(x)
-    ax.set_xticklabels(status_order)
+    ax.set_xticklabels(status_order, rotation=20)
     ax.legend()
-
-    # Label di atas bar
-    for i, val in enumerate(df_counts["Laki-laki"]):
-        ax.text(i - width/2, val + 0.1, str(val), ha='center', va='bottom', fontsize=9, fontweight='bold')
-    for i, val in enumerate(df_counts["Perempuan"]):
-        ax.text(i + width/2, val + 0.1, str(val), ha='center', va='bottom', fontsize=9, fontweight='bold')
-
+    
+    # Tambah anotasi jumlah di atas batang
+    for i in range(len(status_order)):
+        ax.text(x[i] - width/2, df_counts["Laki-laki"].iloc[i] + 0.05, 
+                int(df_counts["Laki-laki"].iloc[i]), ha="center", va="bottom", fontsize=9)
+        ax.text(x[i] + width/2, df_counts["Perempuan"].iloc[i] + 0.05, 
+                int(df_counts["Perempuan"].iloc[i]), ha="center", va="bottom", fontsize=9)
+    
     st.pyplot(fig)
-
-    # Grafik 2: Histogram Z-score
-    st.subheader("📈 Distribusi Z-score Anak")
-    fig2, ax2 = plt.subplots()
-    ax2.hist(df_all["Z-score"], bins=10, color="skyblue", edgecolor="black")
-    ax2.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted")
-    ax2.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted")
-    ax2.set_xlabel("Z-score")
-    ax2.set_ylabel("Jumlah Anak")
-    ax2.legend()
-    st.pyplot(fig2)
