@@ -116,10 +116,14 @@ def buat_pdf(data, gender):
 
     # Logo
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", 4, 4, 20)
+      if os.path.exists("logo.png"):
+    pdf.image("logo.png", 10, 8, 30)  # posisi logo
+    pdf.set_y(20)  # geser posisi Y setelah logo
+
     pdf.set_font("Arial", "B", 16)
     pdf.cell(200, 10, txt="Hasil Deteksi Pertumbuhan Anak", ln=True, align="C")
     pdf.ln(10)
+
 
     # Tabel Data
     pdf.set_font("Arial", "B", 12)
