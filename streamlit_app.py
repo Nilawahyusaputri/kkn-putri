@@ -560,11 +560,12 @@ def serba_serbi_section():
     with col2:
         st.markdown("<div class='neumo' style='text-align:center'>", unsafe_allow_html=True)
         if os.path.exists("assets/family_pastel.png"):
-            st.image("assets/family_pastel.png", use_column_width=True)
+            st.image("assets/family_pastel.png", use_container_width=True)
         else:
             st.markdown("<h3>👨‍👩‍👧‍👦</h3>")
             st.caption("Tambahkan gambar ilustrasi di folder assets/")
         st.markdown("</div>", unsafe_allow_html=True)
+
 
 # =====================================================
 # HOME — Selamat Datang & Latar Belakang
@@ -590,7 +591,7 @@ def home_section():
     with hero_right:
         st.markdown("<div class='neumo' style='text-align:center'>", unsafe_allow_html=True)
         if os.path.exists("assets/hero_kids.png"):
-            st.image("assets/hero_kids.png", use_column_width=True)
+            st.image("assets/hero_kids.png", use_container_width=True)
         else:
             st.markdown("<h2>🧒👧</h2>")
             st.caption("Letakkan ilustrasi di assets/hero_kids.png untuk tampilan optimal.")
