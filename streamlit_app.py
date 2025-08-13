@@ -1,51 +1,45 @@
 # -------------------------------
-# Grafik Distribusi Z-score dengan Warna Kategori (versi baru)
+# Fungsi Klasifikasi WHO + Edukasi (versi baru)
 # -------------------------------
-st.subheader("📈 Distribusi Z-score dengan Kategori Warna")
+def klasifikasi_hfa(z):
+    if z < -3:
+        return "Severely Stunted", "darkred", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
+    elif -3 <= z < -2:
+        return "Stunted", "red", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
+    elif -2 <= z <= 2:
+        return "Normal", "green", "Pertahankan pola makan sehat dan gaya hidup aktif."
+    elif 2 < z <= 3:
+        return "Tall", "blue", "Jaga keseimbangan gizi dan aktivitas."
+    else:  # z > 3
+        return "Very Tall", "purple", "Pastikan tinggi anak sesuai potensi genetik dan sehat."
 
-# Fungsi untuk menentukan kategori (versi baru)
+# -------------------------------
+# Fungsi kategori untuk grafik
+# -------------------------------
 def kategori_zscore(z):
     if z < -3:
-        return "Severely Stunted (sangat pendek)"
+        return "Severely Stunted"
     elif -3 <= z < -2:
-        return "Stunted (pendek)"
+        return "Stunted"
     elif -2 <= z <= 2:
         return "Normal"
     elif 2 < z <= 3:
-        return "Tall (tinggi)"
+        return "Tall"
     else:
-        return "Very Tall (sangat tinggi)"
+        return "Very Tall"
 
-# Mapping warna baru
-color_map = {
-    "Severely Stunted (sangat pendek)": "darkred",
-    "Stunted (pendek)": "red",
+# -------------------------------
+# Mapping warna kategori
+# -------------------------------
+status_color_map = {
+    "Severely Stunted": "darkred",
+    "Stunted": "red",
     "Normal": "green",
-    "Tall (tinggi)": "blue",
-    "Very Tall (sangat tinggi)": "purple"
+    "Tall": "blue",
+    "Very Tall": "purple"
 }
 
-# Tambahkan kolom kategori di dataframe
-df_all["Kategori Z-score"] = df_all["Z-score"].apply(kategori_zscore)
-
-# Hitung jumlah anak per Z-score dan kategori
-df_zscore_counts = df_all.groupby(["Z-score", "Kategori Z-score"]).size().reset_index(name="Jumlah")
-
-# Plot
-fig, ax = plt.subplots(figsize=(8, 5))
-for idx, row in df_zscore_counts.iterrows():
-    ax.bar(row["Z-score"], row["Jumlah"], color=color_map[row["Kategori Z-score"]], width=0.15)
-
-# Garis batas kategori WHO baru
-ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severely Stunted (-3)")
-ax.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted (-2)")
-ax.axvline(x=2, color="blue", linestyle="--", label="Batas Tall (2)")
-ax.axvline(x=3, color="purple", linestyle="--", label="Batas Very Tall (3)")
-
-# Label dan judul
-ax.set_xlabel("Z-score")
-ax.set_ylabel("Jumlah Anak")
-ax.set_title("Distribusi Z-score Anak Berdasarkan Kategori")
-ax.legend()
-
-st.pyplot(fig)
+# -------------------------------
+# Urutan kategori untuk grafik distribusi per gender
+# -------------------------------
+status_order = ["Severely Stunted", "Stunted", "Normal", "Tall", "Very Tall"]
