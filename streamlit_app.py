@@ -61,12 +61,12 @@ def klasifikasi_hfa(z):
         return "Severely Stunted", "darkred", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
     elif -3 <= z < -2:
         return "Stunted", "red", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
-    elif -2 <= z < -1:
-        return "Perlu Perhatian", "orange", "Tingkatkan kualitas makan dan aktivitas fisik."
-    elif -1 <= z <= 3:
+    elif -2 <= z < 2:
         return "Normal", "green", "Pertahankan pola makan sehat dan gaya hidup aktif."
-    else:
-        return "Tall", "blue", "Jaga keseimbangan gizi dan aktivitas."
+    elif 2 <= z < 3:
+        return "Tall", "blue", "Anak lebih tinggi dari rata-rata, pastikan asupan gizi tetap seimbang."
+    else:  # z >= 3
+        return "Very Tall", "purple", "Anak sangat tinggi untuk usianya, perhatikan pola pertumbuhan."
 
 # -------------------------------
 # Mapping Avatar
