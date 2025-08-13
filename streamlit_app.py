@@ -243,15 +243,15 @@ if submit:
         else:
             return "Very Tall"
     
-# Mapping warna
-color_map = {
-    "Severely Stunted": "darkred",
-    "Stunted": "red",
-    "Perlu Perhatian": "orange",
-    "Normal": "green",
-    "Tall": "blue",
-    "Very Tall": "purple"  # tambahan untuk menghindari KeyError
-}
+        # Mapping warna
+        color_map = {
+            "Severely Stunted": "darkred",
+            "Stunted": "red",
+            "Perlu Perhatian": "orange",
+            "Normal": "green",
+            "Tall": "blue",
+            "Very Tall": "purple"  # tambahan untuk menghindari KeyError
+        }
 
     
     # Tambahkan kolom kategori di dataframe
