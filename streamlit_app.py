@@ -114,17 +114,17 @@ def buat_pdf(data, gender):
     pdf = FPDF()
     pdf.add_page()
 
-   # Logo
-if os.path.exists("logo.png"):
-    pdf.image("logo.png", 10, 8, 30)  # logo di kiri atas
-
-# Geser kursor ke bawah setelah logo
-pdf.set_y(20)  # atur supaya judul mulai di bawah logo (20-30 mm biasanya pas)
-
-# Judul
-pdf.set_font("Arial", "B", 16)
-pdf.cell(0, 10, "Hasil Deteksi Pertumbuhan Anak", ln=True, align="C")
-pdf.ln(10)
+       # Logo
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 8, 30)  # logo di kiri atas
+    
+    # Geser kursor ke bawah setelah logo
+    pdf.set_y(20)  # atur supaya judul mulai di bawah logo (20-30 mm biasanya pas)
+    
+    # Judul
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Hasil Deteksi Pertumbuhan Anak", ln=True, align="C")
+    pdf.ln(10)
 
 
 
