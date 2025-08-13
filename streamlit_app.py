@@ -56,67 +56,123 @@ def hitung_zscore(umur_bulan, tinggi, gender):
 # -------------------------------
 # Fungsi Klasifikasi WHO + Edukasi
 # -------------------------------
-# -------------------------------
-# Fungsi Klasifikasi WHO + Edukasi (versi konsisten)
-# -------------------------------
 def klasifikasi_hfa(z):
     if z < -3:
         return "Severely Stunted", "darkred", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
     elif -3 <= z < -2:
         return "Stunted", "red", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
-    elif -2 <= z <= 2:
+    elif -2 <= z < -1:
+        return "Perlu Perhatian", "orange", "Tingkatkan kualitas makan dan aktivitas fisik."
+    elif -1 <= z <= 3:
         return "Normal", "green", "Pertahankan pola makan sehat dan gaya hidup aktif."
-    elif 2 < z <= 3:
+    else:
         return "Tall", "blue", "Jaga keseimbangan gizi dan aktivitas."
-    else:  # z > 3
-        return "Very Tall", "purple", "Pastikan asupan gizi seimbang dan periksa kesehatan secara berkala."
 
 # -------------------------------
-# Mapping Avatar (sesuai kategori baru)
+# Mapping Avatar
 # -------------------------------
 avatar_map = {
     "Severely Stunted": "severely_boy",
     "Stunted": "stunted_boy",
+    "Perlu Perhatian": "attention_boy",
     "Normal": "normal_boy",
-    "Tall": "tall_boy",
-    "Very Tall": "tall_boy"  # pakai avatar Tall sementara
+    "Tall": "tall_boy"
 }
 
 # -------------------------------
-# Warna untuk status gizi (konsisten di semua grafik)
+# Fungsi Buat PDF
 # -------------------------------
-status_color_map = {
-    "Severely Stunted": "darkred",
-    "Stunted": "red",
-    "Normal": "green",
-    "Tall": "blue",
-    "Very Tall": "purple"
-}
+def buat_pdf(data):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, txt="Hasil Deteksi Stunting Anak", ln=True, align="C")
+    pdf.ln(5)
+    pdf.set_font("Arial", size=12)
+    for key, value in data.items():
+        pdf.cell(0, 10, f"{key}: {value}", ln=True)
+    os.makedirs("pdf", exist_ok=True)
+    nama_file = f"pdf/Hasil_{data['Nama Anak'].replace(' ', '_')}.pdf"
+    pdf.output(nama_file)
+    return nama_file
 
 # -------------------------------
-# Fungsi Kategori Z-score (untuk grafik distribusi)
+# Form Input Data
 # -------------------------------
-def kategori_zscore(z):
-    if z < -3:
-        return "Severely Stunted"
-    elif -3 <= z < -2:
-        return "Stunted"
-    elif -2 <= z <= 2:
-        return "Normal"
-    elif 2 < z <= 3:
-        return "Tall"
+with st.form("form_anak"):
+    nama = st.text_input("Nama Anak")
+    tgl_lahir = st.date_input("Tanggal Lahir", value=datetime.date(2015, 6, 1),
+                              min_value=datetime.date(2000, 1, 1),
+                              max_value=datetime.date.today())
+    gender = st.selectbox("Jenis Kelamin", ["Laki-laki", "Perempuan"])
+    tinggi = st.number_input("Tinggi Badan (cm)", min_value=50.0, max_value=200.0)
+    berat = st.number_input("Berat Badan (kg)", min_value=5.0, max_value=100.0)
+    kelas = st.text_input("Kelas")
+    submit = st.form_submit_button("Deteksi")
+
+# -------------------------------
+# Session State
+# -------------------------------
+if "data_anak" not in st.session_state:
+    st.session_state.data_anak = []
+
+# -------------------------------
+# Proses Analisis
+# -------------------------------
+if submit:
+    tahun, bulan, hari, umur_bulan = hitung_umur(tgl_lahir)
+
+    if umur_bulan < 61:
+        st.warning("⚠️ Anak berusia di bawah 5 tahun. Gunakan standar WHO 2006 untuk hasil yang lebih tepat.")
+
+    z = hitung_zscore(umur_bulan, tinggi, gender)
+
+    if z is None:
+        st.warning("Umur belum tersedia dalam standar WHO 2007.")
     else:
-        return "Very Tall"
+        status, warna, tips = klasifikasi_hfa(z)
+
+        st.subheader("📊 Hasil Analisis")
+        st.markdown(f"**Umur:** {tahun} tahun {bulan} bulan {hari} hari")
+        st.write(f"**Z-score HFA:** {z}")
+        st.markdown(
+            f"<div style='background-color:{warna}; padding:10px; border-radius:10px; color:white;'>"
+            f"<b>Status: {status}</b><br/><i>{tips}</i></div>", unsafe_allow_html=True
+        )
+
+        avatar_key = avatar_map.get(status, "normal_boy")
+        avatar_path = f"avatars/{avatar_key if gender=='Laki-laki' else avatar_key.replace('_boy', '_girl')}.png"
+        if os.path.exists(avatar_path):
+            st.image(avatar_path, width=250, caption="Gambaran Anak")
+        else:
+            st.info("[Avatar tidak tersedia]")
+
+        hasil_data = {
+            "Nama Anak": nama,
+            "Tanggal Lahir": tgl_lahir.strftime("%Y-%m-%d"),
+            "Jenis Kelamin": gender,
+            "Umur (bulan)": umur_bulan,
+            "Tinggi Badan (cm)": tinggi,
+            "Berat Badan (kg)": berat,
+            "Kelas": kelas,
+            "Z-score": z,
+            "Status": status
+        }
+        st.session_state.data_anak.append(hasil_data)
+
+        # PDF per anak
+        pdf_path = buat_pdf(hasil_data)
+        with open(pdf_path, "rb") as f:
+            st.download_button("📥 Download PDF Hasil Anak Ini", f, file_name=os.path.basename(pdf_path))
 
 # -------------------------------
-# Visualisasi hanya jika ada data
+# Visualisasi Data Semua Anak
 # -------------------------------
 if st.session_state.data_anak:
     st.subheader("📋 Data Semua Anak yang Sudah Diperiksa")
     df_all = pd.DataFrame(st.session_state.data_anak)
     st.dataframe(df_all, use_container_width=True)
 
-    # Download CSV
     csv = df_all.to_csv(index=False).encode("utf-8")
     st.download_button("📥 Download Semua Data (CSV)", csv, file_name="data_semua_anak.csv", mime="text/csv")
 
@@ -124,55 +180,100 @@ if st.session_state.data_anak:
     # Chart distribusi status gizi per gender
     # -------------------------------
     st.subheader("📊 Distribusi Status Gizi Berdasarkan Gender")
-
-    status_order = ["Severely Stunted", "Stunted", "Normal", "Tall", "Very Tall"]
+    
+    status_order = ["Severely Stunted", "Stunted", "Perlu Perhatian", "Normal", "Tall"]
     gender_order = ["Laki-laki", "Perempuan"]
-
+    
+    # Hitung jumlah anak berdasarkan Status dan Gender
     df_counts = df_all.groupby(["Status", "Jenis Kelamin"]).size().unstack(fill_value=0)
+    
+    # Pastikan urutan dan kolom tetap ada meskipun kosong
     df_counts = df_counts.reindex(index=status_order, columns=gender_order, fill_value=0)
-
+    
+    # Warna untuk status gizi
+    status_color_map = {
+        "Severely Stunted": "darkred",
+        "Stunted": "red",
+        "Perlu Perhatian": "orange",
+        "Normal": "green",
+        "Tall": "blue"
+    }
+    
+    # Lebar batang dan posisi
+    import numpy as np
     x = np.arange(len(status_order))
     width = 0.35
-
+    
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(x - width/2, df_counts["Laki-laki"], width, label="Laki-laki", color="skyblue")
     ax.bar(x + width/2, df_counts["Perempuan"], width, label="Perempuan", color="pink")
-
+    
+    # Label dan judul
     ax.set_ylabel("Jumlah Anak")
     ax.set_xlabel("Kategori Status")
     ax.set_title("Distribusi Status Gizi Berdasarkan Gender")
     ax.set_xticks(x)
     ax.set_xticklabels(status_order, rotation=20)
     ax.legend()
-
+    
+    # Tambah anotasi jumlah di atas batang
     for i in range(len(status_order)):
-        ax.text(x[i] - width/2, df_counts["Laki-laki"].iloc[i] + 0.05, int(df_counts["Laki-laki"].iloc[i]),
-                ha="center", va="bottom", fontsize=9)
-        ax.text(x[i] + width/2, df_counts["Perempuan"].iloc[i] + 0.05, int(df_counts["Perempuan"].iloc[i]),
-                ha="center", va="bottom", fontsize=9)
-
+        ax.text(x[i] - width/2, df_counts["Laki-laki"].iloc[i] + 0.05, 
+                int(df_counts["Laki-laki"].iloc[i]), ha="center", va="bottom", fontsize=9)
+        ax.text(x[i] + width/2, df_counts["Perempuan"].iloc[i] + 0.05, 
+                int(df_counts["Perempuan"].iloc[i]), ha="center", va="bottom", fontsize=9)
+    
     st.pyplot(fig)
 
-    # -------------------------------
-    # Grafik Distribusi Z-score
+
+   # -------------------------------
+    # Grafik Distribusi Z-score dengan Warna Kategori
     # -------------------------------
     st.subheader("📈 Distribusi Z-score dengan Kategori Warna")
-
+    
+    # Fungsi untuk menentukan kategori
+    def kategori_zscore(z):
+        if z < -3:
+            return "Severely Stunted"
+        elif -3 <= z < -2:
+            return "Stunted"
+        elif -2 <= z < -1:
+            return "Perlu Perhatian"
+        elif -1 <= z <= 3:
+            return "Normal"
+        else:
+            return "Tall"
+    
+    # Mapping warna
+    color_map = {
+        "Severely Stunted": "darkred",
+        "Stunted": "red",
+        "Perlu Perhatian": "orange",
+        "Normal": "green",
+        "Tall": "blue"
+    }
+    
+    # Tambahkan kolom kategori di dataframe
     df_all["Kategori Z-score"] = df_all["Z-score"].apply(kategori_zscore)
+    
+    # Hitung jumlah anak per Z-score
     df_zscore_counts = df_all.groupby(["Z-score", "Kategori Z-score"]).size().reset_index(name="Jumlah")
-
+    
+    # Plot manual
     fig, ax = plt.subplots(figsize=(8, 5))
     for idx, row in df_zscore_counts.iterrows():
-        ax.bar(row["Z-score"], row["Jumlah"], color=status_color_map[row["Kategori Z-score"]], width=0.15)
-
+        ax.bar(row["Z-score"], row["Jumlah"], color=color_map[row["Kategori Z-score"]], width=0.15)
+    
+    # Garis batas kategori WHO
     ax.axvline(x=-3, color="darkred", linestyle="--", label="Batas Severe Stunted (-3)")
     ax.axvline(x=-2, color="red", linestyle="--", label="Batas Stunted (-2)")
-    ax.axvline(x=2, color="blue", linestyle="--", label="Batas Tall (+2)")
-    ax.axvline(x=3, color="purple", linestyle="--", label="Batas Very Tall (+3)")
-
+    ax.axvline(x=-1, color="orange", linestyle="--", label="Batas Perlu Perhatian (-1)")
+    ax.axvline(x=3, color="blue", linestyle="--", label="Batas Tall (3)")
+    
+    # Label dan judul
     ax.set_xlabel("Z-score")
     ax.set_ylabel("Jumlah Anak")
     ax.set_title("Distribusi Z-score Anak Berdasarkan Kategori")
     ax.legend()
-
+    
     st.pyplot(fig)
