@@ -163,15 +163,15 @@ def hitung_zscore(umur_bulan, tinggi, gender):
 
 def klasifikasi_hfa(z):
     if z < -3:
-        return "Severely Stunted", "darkred", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
+        return "Severely Stunted", "#8B0000", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
     elif -3 <= z < -2:
-        return "Stunted", "red", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
+        return "Stunted", "#FF4B4B", "Perbaiki gizi anak, tambah asupan protein, dan rutin cek pertumbuhan."
     elif -2 <= z <= 2:
-        return "Normal", "green", "Pertahankan pola makan sehat dan gaya hidup aktif."
+        return "Normal", "#4CAF50", "Pertahankan pola makan sehat dan gaya hidup aktif."
     elif 2 < z <= 3:
-        return "Tall", "blue", "Jaga keseimbangan gizi dan aktivitas."
+        return "Tall", "#1E90FF", "Jaga keseimbangan gizi dan aktivitas."
     else:
-        return "Very Tall", "purple", "Periksa ke tenaga kesehatan jika tinggi badan anak terlalu jauh di atas rata-rata."
+        return "Very Tall", "#800080", "Periksa ke tenaga kesehatan jika tinggi badan anak terlalu jauh di atas rata-rata."
 
 # Avatar map
 avatar_map = {
