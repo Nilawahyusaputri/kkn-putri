@@ -125,6 +125,16 @@ def card(title: str, body: str, emoji: str = "", footer: str = ""):
 # FUNGSI-FUNGSI PERHITUNGAN YANG SUDAH ADA (5–19 tahun)
 # =====================================================
 
+import datetime
+from dateutil.relativedelta import relativedelta
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from fpdf import FPDF
+import os
+from io import BytesIO
+
+# Hitung umur
 def hitung_umur(tgl_lahir):
     today = datetime.date.today()
     diff = relativedelta(today, tgl_lahir)
@@ -134,8 +144,7 @@ def hitung_umur(tgl_lahir):
     umur_bulan = tahun * 12 + bulan
     return tahun, bulan, hari, umur_bulan
 
-# Load LMS WHO (5–19 th) — file: data/hfa-boy-z.xlsx & data/hfa-girl-z.xlsx
-
+# Load LMS WHO (5–19 th)
 def load_lms(gender):
     if gender == "Laki-laki":
         df = pd.read_excel("data/hfa-boy-z.xlsx")
@@ -145,22 +154,26 @@ def load_lms(gender):
     return df
 
 # Hitung z-score HFA (5–19 th)
-
 def hitung_zscore(umur_bulan, tinggi, gender):
     lms_df = load_lms(gender)
     lms_df = lms_df.set_index("UmurBulan").reindex(
         range(lms_df["UmurBulan"].min(), lms_df["UmurBulan"].max() + 1)
-    ).interpolate()
-    if umur_bulan not in lms_df.index:
-        return None
+    ).interpolate(method='linear')
+
+    # Clip umur_bulan agar tidak keluar dari range LMS
+    umur_bulan = max(min(umur_bulan, lms_df.index.max()), lms_df.index.min())
+
     L = float(lms_df.loc[umur_bulan, "L"])
     M = float(lms_df.loc[umur_bulan, "M"])
     S = float(lms_df.loc[umur_bulan, "S"])
-    z = ((tinggi / M)**L - 1) / (L * S)
+
+    if L == 0:
+        z = np.log(tinggi / M) / S
+    else:
+        z = ((tinggi / M) ** L - 1) / (L * S)
     return round(z, 2)
 
 # Klasifikasi WHO (HFA)
-
 def klasifikasi_hfa(z):
     if z < -3:
         return "Severely Stunted", "#8B0000", "Segera periksakan anak ke tenaga kesehatan untuk penanganan lebih lanjut."
@@ -180,10 +193,10 @@ avatar_map = {
     "Normal": "normal_boy",
     "Tall": "tall_boy",
     "Very Tall": "very_tall_boy"
+    # Bisa ditambahkan versi perempuan jika perlu
 }
 
-# Percentile (5–19 th) — file: data/perc-boy.xlsx & data/perc-girl.xlsx
-
+# Load Percentile
 def load_percentile(gender):
     if gender == "Laki-laki":
         df = pd.read_excel("data/perc-boy.xlsx")
@@ -192,30 +205,32 @@ def load_percentile(gender):
     df = df.rename(columns={"Month": "UmurBulan"})
     return df
 
-
+# Hitung persentil
 def hitung_percentil(umur_bulan, tinggi, gender):
     df = load_percentile(gender)
     df_interp = df.set_index("UmurBulan").reindex(
         range(df["UmurBulan"].min(), df["UmurBulan"].max() + 1)
-    ).interpolate()
-    if umur_bulan not in df_interp.index:
-        return None
+    ).interpolate(method='linear')
+
+    umur_bulan = max(min(umur_bulan, df_interp.index.max()), df_interp.index.min())
+
     data = df_interp.loc[umur_bulan]
     persentil_cols = [c for c in df.columns if c.startswith("P")]
     tinggi_list = [data[col] for col in persentil_cols]
     percentil_angka = [float(c[1:]) for c in persentil_cols]
-    selisih = [abs(tinggi - t) for t in tinggi_list]
-    idx_min = np.argmin(selisih)
-    return percentil_angka[idx_min]
 
-# PDF report (tetap, tapi tidak fokus di tampilan halaman baru)
+    # Interpolasi agar lebih akurat
+    percentil = np.interp(tinggi, tinggi_list, percentil_angka)
+    return round(percentil, 1)
 
+# PDF report
 def buat_pdf(data, gender):
     pdf = FPDF()
     pdf.add_page()
 
     if os.path.exists("logo.png"):
         pdf.image("logo.png", 10, 8, 20)
+
     pdf.set_font("Arial", "B", 16)
     pdf.cell(200, 10, txt="Hasil Deteksi Pertumbuhan Anak", ln=True, align="C")
     pdf.ln(10)
@@ -251,17 +266,18 @@ def buat_pdf(data, gender):
     plt.legend()
     plt.tight_layout()
 
-    grafik_path = "grafik_temp.png"
-    plt.savefig(grafik_path)
+    # Simpan plot ke buffer agar tidak ada file sementara
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
     plt.close()
-    if os.path.exists(grafik_path):
-        pdf.image(grafik_path, x=20, w=170)
+    buf.seek(0)
+    pdf.image(buf, x=20, w=170)
+    buf.close()
 
     os.makedirs("pdf", exist_ok=True)
     nama_file = f"pdf/Hasil_{str(data.get('Nama Anak','Anak')).replace(' ', '_')}.pdf"
     pdf.output(nama_file)
     return nama_file
-
 # =====================================================
 # Kalkulator Tinggi Maksimal (Midparental Height, tampilan dulu)
 # =====================================================
